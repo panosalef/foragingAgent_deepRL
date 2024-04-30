@@ -65,31 +65,24 @@ class Agent():
         else:
             critichidden0s = self.buffer.critichidden0s
         
-        #with torch.no_grad():
-        #    values_current_old, critichidden = self.model.evaluate(states, hidden_in=critichidden0s)
-        #self.buffer.critichidden0s = critichidden
-        #values_next_old = torch.zeros_like(values_current_old)
-        #values_next_old[:-1] = values_current_old[1:]
-        #values_next_old = values_current_old[1:]
-        #values_current_old = values_current_old[:-1]
-        values_current_old = torch.zeros_like(rewards); values_next_old = torch.zeros_like(rewards)
-        states = states[:-1]
+        with torch.no_grad():
+            values_current_old, critichidden = self.model.evaluate(states, hidden_in=critichidden0s)
+        self.buffer.critichidden0s = critichidden
+        values_next_old = torch.zeros_like(values_current_old)
+        values_next_old[:-1] = values_current_old[1:]
         advantages, values_target = self.GAE(rewards, dones, values_current_old, values_next_old)
         
         for _ in range(self.num_epoch):                
-            #actionlogprobs, values_current, dist_entropy = self.model(states, actions_old, hidden_in=[actorhidden0s, critichidden0s])
-            actionlogprobs, values_current, dist_entropy = self.model(states, actions_old, hidden_in=[actorhidden0s, actorhidden0s])
+            actionlogprobs, values_current, dist_entropy = self.model(states, actions_old, hidden_in=[actorhidden0s, critichidden0s])
          
             policy_ratios = torch.exp(actionlogprobs - actionlogprobs_old)
             surr1 = policy_ratios * advantages
             surr2 = torch.clamp(policy_ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
             policy_loss = torch.min(surr1, surr2).mean()
-            #value_loss = F.mse_loss(values_current, values_target)
-            value_loss = torch.zeros(1)
+            value_loss = F.mse_loss(values_current, values_target)
             entropy_bonus = (dist_entropy * self.entropy_coef).mean()
             
-            #loss = - policy_loss + value_loss - entropy_bonus
-            loss = - policy_loss - entropy_bonus
+            loss = - policy_loss + value_loss - entropy_bonus
             
             self.model_optim.zero_grad()
             loss.backward()
